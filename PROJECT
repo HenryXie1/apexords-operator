@@ -1,0 +1,3 @@
+version: "2"
+domain: apexords-operator
+repo: github.com/HenryXie1/apexords-operator

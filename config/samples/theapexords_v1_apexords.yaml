@@ -1,0 +1,9 @@
+apiVersion: theapexords.apexords-operator/v1
+kind: ApexOrds
+metadata:
+  name: apexords-sample
+spec:
+  # Add fields here
+  dbname: testcdb
+  dbservice: testpdb
+  ordsname:  testordsddd 
