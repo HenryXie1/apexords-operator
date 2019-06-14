@@ -1,4 +1,4 @@
-module github.com/HenryXie1/apexords-operator
+module apexords-operator
 
 go 1.12
 

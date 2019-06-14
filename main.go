@@ -19,9 +19,12 @@ import (
 	"flag"
 	"os"
 
-	theapexordsv1 "github.com/HenryXie1/apexords-operator/api/v1"
-	"github.com/HenryXie1/apexords-operator/controllers"
+	theapexordsv1 "apexords-operator/api/v1"
+	"apexords-operator/controllers"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,6 +40,9 @@ var (
 func init() {
 
 	appsv1beta1.AddToScheme(scheme)
+	appsv1.AddToScheme(scheme)
+	corev1.AddToScheme(scheme)
+	//metav1.AddToScheme(scheme)
 	theapexordsv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
