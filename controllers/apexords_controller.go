@@ -18,8 +18,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	//"k8s.io/apimachinery/pkg/api/errors"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
@@ -51,6 +55,7 @@ var (
 	}
 )
 
+//Reconcile is the core part of this operator
 func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("apexords", req.NamespacedName)
@@ -100,6 +105,9 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if len(DBstatefulset.Items) == 0 {
 		log.Info("unable to find Apexords operator DB statefulset,going to create new one..")
 		//create a new db statefulset here
+		if err := CreateDbOption(r, req, &apexords); err != nil {
+			log.Error(err, "unable to create Apexords operator DB statefulset.")
+		}
 	} else {
 		for i := 0; i < len(DBstatefulset.Items); i++ {
 			log.Info("Found running Apexords operator DB statefulset name is " + DBstatefulset.Items[i].ObjectMeta.Name)
@@ -109,6 +117,9 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			} else {
 				log.Info("unable to find " + Apexordsdbname + "-apexords-db-sts." + "going to create new one..")
 				//create a new db statefulset here
+				if err := CreateDbOption(r, req, &apexords); err != nil {
+					log.Error(err, "unable to create Apexords operator DB statefulset.")
+				}
 			}
 		}
 	}
@@ -123,7 +134,7 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Info("unable to find Apexords operator DB service,going to create new one..")
 		//create a new db service here
 		if err := CreateDbSvcOption(r, req, &apexords); err != nil {
-			log.Error(err, "unable to create Apexords operator DB service")
+			log.Error(err, "unable to create Apexords operator k8s service for DB")
 		}
 	} else {
 		for i, DBsvc := range DBsvclist.Items {
@@ -151,6 +162,7 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
+//CreateDbSvcOption is to create DB service in K8S
 func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
 	ctx := context.Background()
 	log := r.Log.WithValues("apexords", req.NamespacedName)
@@ -173,7 +185,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(config.OradbSvcyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize oradb yaml")
+		log.Error(err, "can't deserialize oradb service yaml")
 	}
 	oradbsvc = obj.(*corev1.Service)
 	oradbsvc.ObjectMeta.Name = apexords.Spec.Dbname + "-apexords-db-svc"
@@ -181,17 +193,65 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	oradbsvc.ObjectMeta.OwnerReferences = oradbownerref // add owner reference, so easy to clean up
 	oradbsvc.Spec.Selector = oradbselector
 
-	fmt.Printf("\n\n%v\n\n", apexords.TypeMeta.APIVersion)
-	fmt.Printf("%v\n\n", apexords.TypeMeta.Kind)
-	fmt.Printf("%v\n\n", apexords.ObjectMeta.Name)
-	fmt.Printf("%v\n\n", apexords.ObjectMeta.UID)
-
 	if err := r.Create(ctx, oradbsvc); err != nil {
 		log.Error(err, "unable to create DB service")
 		return err
 	}
 
 	return nil
+}
+
+//CreateDbOption function to DB statefulset
+func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+	//ctx := context.Background()
+	log := r.Log.WithValues("apexords", req.NamespacedName)
+	apexordsdbstsname := apexords.Spec.Dbname + "-apexords-db-sts"
+	log.Info("Creating DB statefulset :" + apexordsdbstsname)
+	oradbpasswd := Autopasswd()
+	log.Info("DB sys password is: " + oradbpasswd)
+
+	// complete db statefulset  settings
+	decode := scheme.Codecs.UniversalDeserializer().Decode
+	obj, _, err := decode([]byte(config.OradbStsyml), nil, nil)
+	if err != nil {
+		log.Error(err, "can't deserialize oradb sts yaml")
+	}
+	oradbsts := obj.(*appsv1.StatefulSet)
+	oradbsts.ObjectMeta.Name = apexordsdbstsname
+	oradbsts.ObjectMeta.Namespace = req.NamespacedName.Namespace
+
+	//Update selector
+	var oradbselector = map[string]string{
+		"oradbsts": apexords.Spec.Dbname + "-StsSelector",
+	}
+	oradbsts.Spec.Selector.MatchLabels = oradbselector
+	//Update ORACLE_SID ,ORACLE_PDB,ORACLE_PWD
+	oradbsts.Spec.Template.Spec.Containers[0].Env[0].Value = strings.ToUpper(apexords.Spec.Dbname)
+	oradbsts.Spec.Template.Spec.Containers[0].Env[1].Value = apexords.Spec.Dbname + "pdb"
+	oradbsts.Spec.Template.Spec.Containers[0].Env[2].Value = oradbpasswd
+	oradbsts.Spec.Template.ObjectMeta.Labels = oradbselector
+	//update volume mouth and template name
+	oradbvolname := apexords.Spec.Dbname + "-db-pv-storage"
+	oradbsts.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name = oradbvolname
+	oradbsts.Spec.VolumeClaimTemplates[0].ObjectMeta.Name = oradbvolname
+	//fmt.Printf("%v#\n",o.oradbsts.Spec.VolumeClaimTemplates)
+
+	return nil
+}
+
+//Autopasswd is to generate random password for sys, apex, ords schemas
+func Autopasswd() string {
+	rand.Seed(time.Now().UnixNano())
+	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"abcdefghijklmnopqrstuvwxyz" +
+		"0123456789")
+	length := 8
+	var b strings.Builder
+	for i := 0; i < length; i++ {
+		b.WriteRune(chars[rand.Intn(len(chars))])
+	}
+	str := b.String()
+	return str
 }
 
 func (r *ApexOrdsReconciler) SetupWithManager(mgr ctrl.Manager) error {
