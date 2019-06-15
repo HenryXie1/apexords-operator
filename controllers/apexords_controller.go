@@ -22,9 +22,9 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	//"k8s.io/apimachinery/pkg/api/errors"
+	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	//ref "k8s.io/client-go/tools/reference"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -163,14 +163,13 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 		"oradbsts": apexords.Spec.Dbname + "-StsSelector",
 	}
 
-	var oradbownerref = metav1.ObjectMeta.OwnerReferences{
-		{
+	var oradbownerref = []metav1.OwnerReference{{
 		Kind:       apexords.TypeMeta.Kind,
 		APIVersion: apexords.TypeMeta.APIVersion,
 		Name:       apexords.ObjectMeta.Name,
 		UID:        apexords.ObjectMeta.UID,
-	    },
-    }
+	}}
+
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(config.OradbSvcyml), nil, nil)
 	if err != nil {
@@ -179,14 +178,13 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	oradbsvc = obj.(*corev1.Service)
 	oradbsvc.ObjectMeta.Name = apexords.Spec.Dbname + "-apexords-db-svc"
 	oradbsvc.ObjectMeta.Namespace = req.NamespacedName.Namespace
-	oradbsvc.ObjectMeta.OwnerReferences = oradbownerref  // add owner reference, so easy to clean up
+	oradbsvc.ObjectMeta.OwnerReferences = oradbownerref // add owner reference, so easy to clean up
 	oradbsvc.Spec.Selector = oradbselector
-	
+
 	fmt.Printf("\n\n%v\n\n", apexords.TypeMeta.APIVersion)
 	fmt.Printf("%v\n\n", apexords.TypeMeta.Kind)
 	fmt.Printf("%v\n\n", apexords.ObjectMeta.Name)
 	fmt.Printf("%v\n\n", apexords.ObjectMeta.UID)
-	
 
 	if err := r.Create(ctx, oradbsvc); err != nil {
 		log.Error(err, "unable to create DB service")
