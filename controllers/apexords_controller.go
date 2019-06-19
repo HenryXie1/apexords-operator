@@ -152,6 +152,12 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 		}
 	}
+
+	//check if apex 19.1 is installed in the db, if not, install it
+	//create sqlpluspod
+	if err := CreateSqlplusPod(r, req); err != nil {
+		log.Error(err, "unable to create Sqlpluspod")
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -160,6 +166,69 @@ func ignoreNotFound(err error) error {
 		return nil
 	}
 	return err
+}
+
+//CreateSqlplusPod Function to create sqlpluspod to run installation sql
+func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
+	ctx := context.Background()
+	log := r.Log.WithValues("apexords", req.NamespacedName)
+	var waitsec int64 = 10
+	typeMetadata := metav1.TypeMeta{
+		Kind:       "Pod",
+		APIVersion: "v1",
+	}
+	objectMetadata := metav1.ObjectMeta{
+		Name:      "sqlpluspod",
+		Namespace: "default",
+	}
+	podSpecs := corev1.PodSpec{
+		//ImagePullSecrets: []corev1.LocalObjectReference{{
+		//	Name: "iad-ocir-secret",
+		//}},
+		Containers: []corev1.Container{{
+			Name:  "sqlpluspod",
+			Image: "iad.ocir.io/espsnonprodint/autostg/instantclient-apex19:v1",
+		}},
+		TerminationGracePeriodSeconds: &waitsec,
+	}
+	pod := corev1.Pod{
+		TypeMeta:   typeMetadata,
+		ObjectMeta: objectMetadata,
+		Spec:       podSpecs,
+	}
+	log.Info("Creating sqlpluspod .......")
+
+	if err := r.Create(ctx, &pod); err != nil {
+		log.Error(err, "unable to create sqlplus pod")
+		return err
+	}
+	podstatus := &corev1.Pod{}
+	verifyPodState := func() bool {
+		if err := r.Get(ctx, client.ObjectKey{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      "sqlpluspod",
+		}, podstatus); err != nil {
+			return false
+		}
+		if podstatus.Status.Phase == corev1.PodRunning {
+			return true
+		}
+		return false
+	}
+	//8 min timeout for starting pod
+	for i := 0; i < 96; i++ {
+		if !verifyPodState() {
+			log.Info("waiting for sqlpluspod to start.......")
+			time.Sleep(5 * time.Second)
+
+		} else {
+			log.Info("sqlpluspod started.......")
+			return nil
+		}
+	}
+	log.Error(nil, "Timeout to start sqlplus pod")
+	return nil
+
 }
 
 //CreateDbSvcOption is to create DB service in K8S
@@ -233,7 +302,7 @@ func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexor
 	oradbsts.Spec.Selector.MatchLabels = oradbselector
 	//Update ORACLE_SID ,ORACLE_PDB,ORACLE_PWD
 	oradbsts.Spec.Template.Spec.Containers[0].Env[0].Value = strings.ToUpper(apexords.Spec.Dbname)
-	oradbsts.Spec.Template.Spec.Containers[0].Env[1].Value = apexords.Spec.Dbname + "pdb"
+	oradbsts.Spec.Template.Spec.Containers[0].Env[1].Value = strings.ToUpper(apexords.Spec.Dbservice)
 	oradbsts.Spec.Template.Spec.Containers[0].Env[2].Value = oradbpasswd
 	oradbsts.Spec.Template.ObjectMeta.Labels = oradbselector
 	oradbsts.ObjectMeta.OwnerReferences = oradbownerref // add owner reference, so easy to clean up

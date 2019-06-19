@@ -4,6 +4,6 @@ metadata:
   name: apexords-sample
 spec:
   # Add fields here
-  dbname: testcdb
-  dbservice: testpdb
-  ordsname:  testordsee 
+  dbname: psqlcdb
+  dbservice: psqlpdb
+  ordsname:  psqlords 
