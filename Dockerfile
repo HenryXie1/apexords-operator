@@ -9,6 +9,9 @@ COPY controllers/ controllers/
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
+# add proxy for building behind firewall
+ENV http_proxy=http://www-proxy.au.oracle.com:80
+ENV https_proxy=http://www-proxy.au.oracle.com:80
 
 
 # Build

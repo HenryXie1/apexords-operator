@@ -175,7 +175,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 		"oradbsts": apexords.Spec.Dbname + "-StsSelector",
 	}
 
-	var oradbownerref = []metav1.OwnerReference{{
+	var oradbsvcownerref = []metav1.OwnerReference{{
 		Kind:       apexords.TypeMeta.Kind,
 		APIVersion: apexords.TypeMeta.APIVersion,
 		Name:       apexords.ObjectMeta.Name,
@@ -190,7 +190,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	oradbsvc = obj.(*corev1.Service)
 	oradbsvc.ObjectMeta.Name = apexords.Spec.Dbname + "-apexords-db-svc"
 	oradbsvc.ObjectMeta.Namespace = req.NamespacedName.Namespace
-	oradbsvc.ObjectMeta.OwnerReferences = oradbownerref // add owner reference, so easy to clean up
+	oradbsvc.ObjectMeta.OwnerReferences = oradbsvcownerref // add owner reference, so easy to clean up
 	oradbsvc.Spec.Selector = oradbselector
 
 	if err := r.Create(ctx, oradbsvc); err != nil {
@@ -203,7 +203,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 
 //CreateDbOption function to DB statefulset
 func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
-	//ctx := context.Background()
+	ctx := context.Background()
 	log := r.Log.WithValues("apexords", req.NamespacedName)
 	apexordsdbstsname := apexords.Spec.Dbname + "-apexords-db-sts"
 	log.Info("Creating DB statefulset :" + apexordsdbstsname)
@@ -224,17 +224,29 @@ func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexor
 	var oradbselector = map[string]string{
 		"oradbsts": apexords.Spec.Dbname + "-StsSelector",
 	}
+	var oradbownerref = []metav1.OwnerReference{{
+		Kind:       apexords.TypeMeta.Kind,
+		APIVersion: apexords.TypeMeta.APIVersion,
+		Name:       apexords.ObjectMeta.Name,
+		UID:        apexords.ObjectMeta.UID,
+	}}
 	oradbsts.Spec.Selector.MatchLabels = oradbselector
 	//Update ORACLE_SID ,ORACLE_PDB,ORACLE_PWD
 	oradbsts.Spec.Template.Spec.Containers[0].Env[0].Value = strings.ToUpper(apexords.Spec.Dbname)
 	oradbsts.Spec.Template.Spec.Containers[0].Env[1].Value = apexords.Spec.Dbname + "pdb"
 	oradbsts.Spec.Template.Spec.Containers[0].Env[2].Value = oradbpasswd
 	oradbsts.Spec.Template.ObjectMeta.Labels = oradbselector
+	oradbsts.ObjectMeta.OwnerReferences = oradbownerref // add owner reference, so easy to clean up
 	//update volume mouth and template name
 	oradbvolname := apexords.Spec.Dbname + "-db-pv-storage"
 	oradbsts.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name = oradbvolname
 	oradbsts.Spec.VolumeClaimTemplates[0].ObjectMeta.Name = oradbvolname
 	//fmt.Printf("%v#\n",o.oradbsts.Spec.VolumeClaimTemplates)
+
+	if err := r.Create(ctx, oradbsts); err != nil {
+		log.Error(err, "unable to create DB statefulset")
+		return err
+	}
 
 	return nil
 }
