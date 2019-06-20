@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -31,9 +32,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	//ref "k8s.io/client-go/tools/reference"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	//"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	theapexordsv1 "apexords-operator/api/v1"
 	config "apexords-operator/controllers/config"
@@ -158,6 +163,16 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := CreateSqlplusPod(r, req); err != nil {
 		log.Error(err, "unable to create Sqlpluspod")
 	}
+	//run a cmd in sqlplispod
+	SQLCommand := []string{"/bin/sh", "-c", "sqlplus"}
+	Podname := "sqlpluspod"
+	if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
+		log.Error(err, "Error to run " + strings.Join(SQLCommand, " ") + " in Sqlpluspod")
+	}
+	//delete sqlpluspod
+	if err := DeleteSqlplusPod(r, req); err != nil {
+		log.Error(err, "unable to delete Sqlpluspod")
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -166,6 +181,25 @@ func ignoreNotFound(err error) error {
 		return nil
 	}
 	return err
+}
+
+//DeleteSqlplusPod function is to clean sqlpluspod
+func DeleteSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
+	ctx := context.Background()
+	log := r.Log.WithValues("apexords", req.NamespacedName)
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: req.NamespacedName.Namespace,
+			Name:      "sqlpluspod",
+		},
+	}
+	log.Info("Deleting sqlpluspod .......")
+	if err := r.Delete(ctx, pod); err != nil {
+		log.Error(err, "unable to delete sqlplus pod")
+		return err
+	}
+	return nil
 }
 
 //CreateSqlplusPod Function to create sqlpluspod to run installation sql
@@ -179,7 +213,7 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	}
 	objectMetadata := metav1.ObjectMeta{
 		Name:      "sqlpluspod",
-		Namespace: "default",
+		Namespace: req.NamespacedName.Namespace,
 	}
 	podSpecs := corev1.PodSpec{
 		//ImagePullSecrets: []corev1.LocalObjectReference{{
@@ -228,6 +262,56 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	}
 	log.Error(nil, "Timeout to start sqlplus pod")
 	return nil
+
+}
+
+//ExecPodCmd function is to run cmd ie sqlplus
+func ExecPodCmd(r *ApexOrdsReconciler, req ctrl.Request, Podname string, SQLCommand []string) error {
+	log := r.Log.WithValues("apexords", req.NamespacedName)
+	//get restconfig from kubeconfig or cluster
+	cfg, err := ctrlconfig.GetConfig()
+	if err != nil {
+		log.Error(err, "unable to get kubeconfig")
+		return err
+
+	}
+
+	kubeclientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+	execReq := kubeclientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(Podname).
+		Namespace(req.NamespacedName.Namespace).
+		SubResource("exec")
+
+	execReq.VersionedParams(&corev1.PodExecOptions{
+		Command: SQLCommand,
+		Stdin:   true,
+		Stdout:  true,
+		Stderr:  true,
+	}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(cfg, "POST", execReq.URL())
+	if err != nil {
+		log.Error(err, "error while creating Executor:")
+		return err
+
+	}
+
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Tty:    false,
+	})
+	if err != nil {
+		log.Error(err, "error in Stream")
+		return err
+	} else {
+		return nil
+	}
 
 }
 
