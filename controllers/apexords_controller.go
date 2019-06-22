@@ -297,7 +297,7 @@ func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 				log.Info("unable to find " + apexords.Spec.Dbname + "-apexords-db-sts." + "going to create new one..")
 				//create a new db statefulset here
 				if err := CreateDbOption(r, req, apexords); err != nil {
-					log.Error(err, "unable to create Apexords operator DB statefulset.")
+					log.Error(err, "unable to create Apexords operator DB statefulsets.")
 					return err
 				}
 			}
