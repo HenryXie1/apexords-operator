@@ -30,6 +30,7 @@ rules:
   - ""
   resources:
   - pods
+  - pods/exec
   - secrets
   - services
   - configmaps
