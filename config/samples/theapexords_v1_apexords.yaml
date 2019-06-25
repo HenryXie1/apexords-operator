@@ -6,4 +6,5 @@ spec:
   # Add fields here
   dbname: psqlcdb
   dbservice: psqlpdb
-  ordsname:  psqlords 
+  ordsname:  psqlords
+  #apexruntimeonly: True 

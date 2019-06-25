@@ -40,6 +40,10 @@ type ApexOrdsSpec struct {
 
 	// Specify the Ords(Oracle Rest Data Service) name
 	Ordsname string `json:"ordsname"`
+
+	//Specify to install Apex runtime only,default is false
+	// +optional
+	Apexruntimeonly bool `json:"apexruntimeonly,omitempty"`
 }
 
 // ApexOrdsStatus defines the observed state of ApexOrds

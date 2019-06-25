@@ -94,10 +94,8 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	//create password for DB
 	r.Dbpassword = Autopasswd(apexords.Spec.Dbname + apexords.Spec.Ordsname)
-	log.Info("DB sys Apex Ords schemas password is: " + r.Dbpassword + " users need to update it later.")
 
 	// Get the deployments of ords with the name specified in apexords.spec
-
 	var Ordsdeployment appsv1beta1.DeploymentList
 	if err := r.List(ctx, &Ordsdeployment, client.InNamespace(req.Namespace)); err != nil {
 		log.Error(err, "unable to list Ords deployments")
@@ -265,7 +263,8 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 		log.Error(err, "unable to create Ords ords load balancer service ")
 
 	}
-	log.Info("Apex Internal Workspace admin password: Welcome1` (Use apxchpwd.sql to change it)")
+	log.Info("DB sys Apex Ords schemas password is: " + r.Dbpassword + " users need to update it later.")
+	log.Info("Apex Internal Workspace admin password: " + r.Dbpassword + "Apx1#" + " (Use apxchpwd.sql to change it)")
 	return nil
 }
 
@@ -375,18 +374,35 @@ func CreateApexOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 		log.Error(err, "unable to create Sqlpluspod")
 
 	}
-	//run apex installation sql in sqlplispod
-	log.Info("Create Apex in Target DB....")
+	// if apexords.Spec.Apexruntimeonly is true,run apex runtimeonly installation sql in sqlplispod
+	if apexords.Spec.Apexruntimeonly {
+		log.Info("Create Apex runtime only in Target DB....")
+		sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@createapexruntimeonly.sql"
+		SQLCommand := []string{"/bin/sh", "-c", sqltext}
+		Podname := "sqlpluspod"
+		if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
+			log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+		}
+	} else {
+		log.Info("Create Apex in Target DB....")
+		sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@createapex.sql"
+		SQLCommand := []string{"/bin/sh", "-c", sqltext}
+		Podname := "sqlpluspod"
+		if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
+			log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+		}
+	}
 
-	sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@createapex.sql"
+	log.Info("Update Apex schema password in Target DB....")
+	sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@updatepass.sql " + r.Dbpassword
 	SQLCommand := []string{"/bin/sh", "-c", sqltext}
 	Podname := "sqlpluspod"
 	if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
 		log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
 	}
 
-	log.Info("Update Apex schema password in Target DB....\n")
-	sqltext = "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@updatepass.sql " + r.Dbpassword
+	log.Info("Update Apex workspace Admin password in Target DB.....")
+	sqltext = "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@apxchpwd-silent-admin.sql " + r.Dbpassword + "Apx1#"
 	SQLCommand = []string{"/bin/sh", "-c", sqltext}
 	Podname = "sqlpluspod"
 	if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
@@ -534,8 +550,9 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 		//	Name: "iad-ocir-secret",
 		//}},
 		Containers: []corev1.Container{{
-			Name:  "sqlpluspod",
-			Image: "iad.ocir.io/espsnonprodint/autostg/instantclient-apex19:v1",
+			Name:            "sqlpluspod",
+			Image:           "iad.ocir.io/espsnonprodint/autostg/instantclient-apex19:v1",
+			ImagePullPolicy: "Always",
 		}},
 		TerminationGracePeriodSeconds: &waitsec,
 	}
