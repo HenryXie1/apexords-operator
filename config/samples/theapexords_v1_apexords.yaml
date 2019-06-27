@@ -7,4 +7,4 @@ spec:
   dbname: psqlcdb
   dbservice: psqlpdb
   ordsname:  psqlords
-  #apexruntimeonly: True 
+  apexruntimeonly: True 
