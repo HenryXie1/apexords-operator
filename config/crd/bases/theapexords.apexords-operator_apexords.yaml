@@ -387,6 +387,9 @@ spec:
           type: object
         spec:
           properties:
+            apexruntimeonly:
+              description: Specify to install Apex runtime only,default is false
+              type: boolean
             dbname:
               description: sys apex ords schema passwords will be genrated randomly
                 and shown in operator logs The CDB name for oracle 19c database

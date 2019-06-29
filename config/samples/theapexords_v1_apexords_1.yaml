@@ -1,0 +1,10 @@
+apiVersion: theapexords.apexords-operator/v1
+kind: ApexOrds
+metadata:
+  name: apexords-hhsqlords
+spec:
+  # Add fields here
+  dbname: hhsqlcdb
+  dbservice: hhsqlpdb
+  ordsname:  hhsqlords
+  # apexruntimeonly: True 
