@@ -12,4 +12,5 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 ## How to test in remote kubernetes cluster
 * make docker-build docker-push IMG=<some-registry>/apexords-controller  
 * Modify image locations on yaml files under config/default/
+* make deploy
 * kubectl apply -f config/sample/theapexords_v1_apexords.yaml
