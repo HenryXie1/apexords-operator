@@ -7,8 +7,8 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * make install
 ## How to test on local machine
 * make run   
-** it will run controller locally while communicating with K8S master
-** all controller logs display on the screen
+  * it will run controller locally while communicating with K8S master
+  * all controller logs display on the screen
 * kubectl apply -f config/sample/theapexords_v1_apexords_1.yaml
 * kubectl get apexords
 
@@ -18,7 +18,7 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * make deploy
 * kubectl apply -f config/sample/theapexords_v1_apexords_1.yaml
 * kubectl get po -n apexords-operator-system
-** find apexords controller pod 
+  * find apexords controller pod 
 * kubectl logs -f controller-pod-name  -n apexords-operator-system
-** see controller logs of what happened include password infor
+  * see controller logs of what happened include password infor
 * kubectl get apexords
