@@ -71,19 +71,14 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Get(ctx, req.NamespacedName, &apexords); err != nil {
 		log.Error(err, "unable to fetch CRD ApexOrds")
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
 	if apexords.Spec.Dbname == "" {
-		// We choose to absorb the error here
 		log.Error(nil, "DB name can't be empty")
 		return ctrl.Result{}, nil
 	}
 	if apexords.Spec.Ordsname == "" {
-		// We choose to absorb the error here
 		log.Error(nil, "Ords name can't be empty")
 		return ctrl.Result{}, nil
 	}
