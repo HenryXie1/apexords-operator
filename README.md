@@ -6,13 +6,19 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * git clone https://github.com/HenryXie1/apexords-operator
 * make install
 ## How to test on local machine
-* make run    ( it will run controller locally while communicating with K8S master)
+* make run   
+  * it will run controller locally while communicating with K8S master
+  * all controller logs display on the screen
 * kubectl apply -f config/sample/theapexords_v1_apexords_1.yaml
 * kubectl get apexords
 
 ## How to test in remote kubernetes cluster
-* make docker-build docker-push IMG=<some-registry>/apexords-controller  
+* make docker-build docker-push IMG=some-registry/apexords-controller  
 * Modify image locations on yaml files under config/default/
 * make deploy
 * kubectl apply -f config/sample/theapexords_v1_apexords_1.yaml
+* kubectl get po -n apexords-operator-system
+  * find apexords controller pod 
+* kubectl logs -f controller-pod-name  -n apexords-operator-system
+  * see controller logs of what happened include password infor
 * kubectl get apexords
