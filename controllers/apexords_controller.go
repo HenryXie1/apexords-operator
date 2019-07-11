@@ -181,7 +181,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	ordsnodeportsvc := obj.(*corev1.Service)
 	ordsnodeportsvc.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-nodeport-svc"
 	ordsnodeportsvc.ObjectMeta.Namespace = req.NamespacedName.Namespace
-	ordsnodeportsvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up
+	ordsnodeportsvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up apexords
 	ordsnodeportsvc.Spec.Selector = ordsselector
 
 	//complete ords and http configmap settings
