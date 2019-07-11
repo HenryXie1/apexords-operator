@@ -170,7 +170,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	ordssvc := obj.(*corev1.Service)
 	ordssvc.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-svc"
 	ordssvc.ObjectMeta.Namespace = req.NamespacedName.Namespace
-	ordssvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up
+	ordssvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up apexords
 	ordssvc.Spec.Selector = ordsselector
 
 	//Update nodeport service name
@@ -236,7 +236,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 		log.Error(err, "unable to delete Ords pod")
 
 	}
-	//create ords deployment
+	//create ords deployments
 	log.Info("Creating ords deployment " + apexordsordsdeployname)
 	if err := r.Create(ctx, ordsdeployment); err != nil {
 		log.Error(err, "unable to create Ords deployment")
