@@ -28,3 +28,7 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * kubectl logs -f controller-pod-name  -n apexords-operator-system
   * see controller logs of what happened include password infor
 * kubectl get apexords
+## Clean up
+* kubectl delete apexords  <apexords name>
+  * As we put owner reference for apexords , it will delete all related statefulesets, deployments,loadbalancer,configmap....etc
+  * PV will not be deleted,thus Data won't be lost
