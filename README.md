@@ -5,6 +5,12 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * check kubectl cluster-info  is working properly 
 * git clone https://github.com/HenryXie1/apexords-operator
 * make install
+## Tasks in the operator
+* create Oracle 19c DB statefulset
+* install Apex 19.1 into the DB
+* install and configurate Ords into the DB
+* start http as sidebar for Ords
+* create loadbalancer for the Apex service 
 ## How to test on local machine
 * make run   
   * it will run controller locally while communicating with K8S master
