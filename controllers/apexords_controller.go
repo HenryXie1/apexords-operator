@@ -170,7 +170,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	ordssvc := obj.(*corev1.Service)
 	ordssvc.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-svc"
 	ordssvc.ObjectMeta.Namespace = req.NamespacedName.Namespace
-	ordssvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up created objects
+	ordssvc.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up created related objects
 	ordssvc.Spec.Selector = ordsselector
 
 	//Update nodeport service name
