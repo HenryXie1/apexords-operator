@@ -122,7 +122,7 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
-//CreateOrdsOption to create http and ords deployments plus loadbalancer
+//CreateOrdsOption to create http and ords deployments plus load balancer
 func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
 	ctx := context.Background()
 	log := r.Log.WithValues("apexords", req.NamespacedName)
