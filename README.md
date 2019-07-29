@@ -15,14 +15,42 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * make run   
   * it will run controller locally while communicating with K8S master
   * all controller logs display on the screen
-* kubectl apply -f config/samples/theapexords_v1_apexords_1.yaml
+* run below cmd
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: theapexords.apexords-operator/v1
+kind: ApexOrds
+metadata:
+ name: apexords-apexdevords
+spec:
+ # Add fields here
+ dbname: apexdevcdb
+ dbservice: apexdevpdb
+ ordsname: apexdevords
+ # apexruntimeonly: True
+EOF
+```
 * kubectl get apexords
 
 ## How to test in remote kubernetes cluster
 * make docker-build docker-push IMG="some-registry"/apexords-controller  
 * Modify image locations on yaml files under config/default/
 * make deploy
-* kubectl apply -f config/samples/theapexords_v1_apexords_1.yaml
+* run below cmd
+```
+cat <<EOF | kubectl apply -f -
+apiVersion: theapexords.apexords-operator/v1
+kind: ApexOrds
+metadata:
+ name: apexords-apexdevords
+spec:
+ # Add fields here
+ dbname: apexdevcdb
+ dbservice: apexdevpdb
+ ordsname: apexdevords
+ # apexruntimeonly: True
+EOF
+```
 * kubectl get po -n apexords-operator-system
   * find apexords controller pod 
 * kubectl logs -f controller-pod-name  -n apexords-operator-system
