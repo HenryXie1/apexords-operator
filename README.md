@@ -12,6 +12,7 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * start http as sidebar for Ords
 * create loadbalancer for the Apex service 
 ## How to test on local machine
+* make install
 * make run   
   * it will run controller locally while communicating with K8S master
   * all controller logs display on the screen
