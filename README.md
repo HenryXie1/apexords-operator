@@ -9,7 +9,7 @@ This is operator to automate Apex [Oracle Application Express](https://apex.orac
 * create Oracle 19c DB statefulset
 * install Apex 19.1 into the DB
 * install and configurate Ords into the DB
-* start http as sidebar for Ords
+* start http as sidecar for Ords
 * create loadbalancer for the Apex service 
 ## How to test on local machine
 * make install
