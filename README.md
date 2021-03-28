@@ -62,4 +62,4 @@ EOF
   * As we put owner reference for apexords , it will delete all related statefulesets, deployments,loadbalancer,configmap....etc
   * PV will not be deleted,thus Data won't be lost
  ## Demo:
- ![Demo!](https://i.imgur.com/PGK09FT.gif)
+ ![YouTube Demo!](https://youtu.be/bebUj6TNtuY)
