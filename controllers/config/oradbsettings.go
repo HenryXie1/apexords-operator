@@ -34,7 +34,7 @@ spec:
          runAsUser: 54321
          fsGroup: 54321
       containers:
-        - image: iad.ocir.io/espsnonprodint/autostg/database:19.2
+        - image: henryxie/apexords-operator-database:19.2
           name: oradbauto
           ports:
             - containerPort: 1521

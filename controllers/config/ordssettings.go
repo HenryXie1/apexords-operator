@@ -86,7 +86,7 @@ spec:
                  name: ordsautoconfig
          containers:
            - name: ords
-             image: iad.ocir.io/espsnonprodint/autostg/apexords:v19
+             image: henryxie/apexords-operator-apexords:v19
              imagePullPolicy: IfNotPresent
              volumeMounts:
                 - name: ords-config
@@ -94,7 +94,7 @@ spec:
              ports:
                 - containerPort: 8888
            - name: httpd
-             image: iad.ocir.io/espsnonprodint/autostg/oel-httpd:v4
+             image: henryxie/apexords-operator-oel-httpd:v4
              imagePullPolicy: IfNotPresent
              volumeMounts:
                 - name: httpd-config
