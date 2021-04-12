@@ -7,8 +7,8 @@ var (
   #
   #
   # Docker images are based on Oracle GitHub Docker Repo 
-  # ords container uses iad.ocir.io/espsnonprodint/autostg/apexords:v19
-  # httpd container uses iad.ocir.io/espsnonprodint/autostg/oel-httpd:v4
+  # ords container uses henryxie/apexords-operator-apexords:v19
+  # httpd container uses henryxie/apexords-operator-oel-httpd:v4
   # list ords deployment with label app=peordshttp
   # list versions ords and Apex status in DB
 	kubectl ords list -d dbhost -p 1521 -s testpdbsvc -w syspassword

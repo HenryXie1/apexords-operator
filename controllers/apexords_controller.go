@@ -24,7 +24,6 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -88,7 +87,7 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	r.Dbpassword = Autopasswd(apexords.Spec.Dbname + apexords.Spec.Ordsname)
 
 	// Get the deployments of ords with the name specified in apexords.spec
-	var Ordsdeployment appsv1beta1.DeploymentList
+	var Ordsdeployment appsv1.DeploymentList
 	if err := r.List(ctx, &Ordsdeployment, client.InNamespace(req.Namespace)); err != nil {
 		log.Error(err, "unable to list Ords deployments")
 		return ctrl.Result{}, err
@@ -266,7 +265,7 @@ func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	log := r.Log.WithValues("apexords", req.NamespacedName)
 
 	//check if DB stateful exists, if not create one
-	var DBstatefulset appsv1beta1.StatefulSetList
+	var DBstatefulset appsv1.StatefulSetList
 	if err := r.List(ctx, &DBstatefulset, client.InNamespace(req.Namespace), client.MatchingLabels(Apexordsoperatorlabel)); err != nil {
 		log.Error(err, "unable to list Apexords operator DB statefulset")
 		return err
@@ -468,7 +467,7 @@ func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexord
 
 	podSpecs := corev1.PodSpec{
 		//ImagePullSecrets: []corev1.LocalObjectReference{{
-		//	Name: "iad-ocir-secret",
+		//	Name: "repo-secret",
 		//}},
 		Volumes: []corev1.Volume{{
 			Name: "ords-config",
@@ -478,7 +477,7 @@ func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexord
 		}},
 		Containers: []corev1.Container{{
 			Name:  "ordspod",
-			Image: "iad.ocir.io/espsnonprodint/autostg/apexords:v19",
+			Image: "henryxie/apexords-operator-apexords:v19",
 			VolumeMounts: []corev1.VolumeMount{{
 				Name:      "ords-config",
 				MountPath: "/mnt/k8s",
@@ -539,11 +538,11 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	}
 	podSpecs := corev1.PodSpec{
 		//ImagePullSecrets: []corev1.LocalObjectReference{{
-		//	Name: "iad-ocir-secret",
+		//	Name: "repo-secret",
 		//}},
 		Containers: []corev1.Container{{
 			Name:            "sqlpluspod",
-			Image:           "iad.ocir.io/espsnonprodint/autostg/instantclient-apex19:v1",
+			Image:           "henryxie/apexords-operator-instantclient-apex19:v1",
 			ImagePullPolicy: "Always",
 		}},
 		TerminationGracePeriodSeconds: &waitsec,

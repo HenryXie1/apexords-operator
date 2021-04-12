@@ -57,6 +57,15 @@ EOF
 * kubectl logs -f controller-pod-name  -n apexords-operator-system
   * see controller logs of what happened include password infor
 * kubectl get apexords
+
+## How to login Apex instance
+* kubectl get svc
+  * find nodeport or Loadbalancer IP or DNS details
+  * open browser to access 
+  * workspace: internal 
+  * username: admin
+  * password: find it in controller logs output
+
 ## Clean up
 * kubectl delete apexords  the-apexords-name
   * As we put owner reference for apexords , it will delete all related statefulesets, deployments,loadbalancer,configmap....etc
