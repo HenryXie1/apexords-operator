@@ -34,7 +34,8 @@ EOF
 * kubectl get apexords
 
 ## How to test in remote kubernetes cluster
-* make docker-build docker-push IMG="some-registry"/apexords-controller  
+* make docker-build 
+* make docker-push IMG="some-registry"/apexords-controller  
 * Modify image locations on yaml files under config/default/
 * make deploy
 * run below cmd
