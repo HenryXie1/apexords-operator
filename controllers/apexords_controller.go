@@ -1,4 +1,5 @@
 /*
+Copyright 2021 Henry Xie.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,30 +26,33 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	theapexordsv1 "apexords-operator/api/v1"
-	config "apexords-operator/controllers/config"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	operatorv1 "apexords-operator/apexords-operator/api/v1"
+	config "apexords-operator/apexords-operator/controllers/config"
 )
 
 // ApexOrdsReconciler reconciles a ApexOrds object
 type ApexOrdsReconciler struct {
 	client.Client
-	Log        logr.Logger
 	Scheme     *runtime.Scheme
+	Log        logr.Logger
 	Dbpassword string
 }
 
-// +kubebuilder:rbac:groups=theapexords.apexords-operator,resources=apexords,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=theapexords.apexords-operator,resources=apexords/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=operator.apexords-operator,resources=apexords,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=operator.apexords-operator,resources=apexords/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=operator.apexords-operator,resources=apexords/finalizers,verbs=update
+
 var (
 	//set label details for related objects
 	Apexordsoperatorlabel = map[string]string{
@@ -56,26 +60,33 @@ var (
 	}
 )
 
-//Reconcile is the core part of this operator
-func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the ApexOrds object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *ApexOrdsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	_ = log.FromContext(ctx)
 
 	// your logic here
 
-	var apexords theapexordsv1.ApexOrds
+	var apexords operatorv1.ApexOrds
 
 	if err := r.Get(ctx, req.NamespacedName, &apexords); err != nil {
-		log.Error(err, "unable to fetch CRD ApexOrds")
-		return ctrl.Result{}, ignoreNotFound(err)
+		log.Log.Error(err, "unable to fetch CRD ApexOrds")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if apexords.Spec.Dbname == "" {
-		log.Error(nil, "DB name can't be empty")
+		log.Log.Error(nil, "DB name can't be empty")
 		return ctrl.Result{}, nil
 	}
 	if apexords.Spec.Ordsname == "" {
-		log.Error(nil, "Ords name can't be empty")
+		log.Log.Error(nil, "Ords name can't be empty")
 		return ctrl.Result{}, nil
 	}
 	// set default db port to 1521
@@ -89,44 +100,37 @@ func (r *ApexOrdsReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Get the deployments of ords with the name specified in apexords.spec
 	var Ordsdeployment appsv1.DeploymentList
 	if err := r.List(ctx, &Ordsdeployment, client.InNamespace(req.Namespace)); err != nil {
-		log.Error(err, "unable to list Ords deployments")
+		log.Log.Error(err, "unable to list Ords deployments")
 		return ctrl.Result{}, err
 	}
 	for i := 0; i < len(Ordsdeployment.Items); i++ {
-		log.Info("Found deployment name is " + Ordsdeployment.Items[i].ObjectMeta.Name)
+		log.Log.Info("Found deployment name is " + Ordsdeployment.Items[i].ObjectMeta.Name)
 	}
 
 	//install DB statefulset
 	if err := CreateDbstsOption(r, req, &apexords); err != nil {
-		log.Error(err, "unable to create Apex on DB")
+		log.Log.Error(err, "unable to create Apex on DB")
 	}
 
 	//install apex 19.1 in the db,password would be same as sys
 	if err := CreateApexOption(r, req, &apexords); err != nil {
-		log.Error(err, "unable to create Apex on DB")
+		log.Log.Error(err, "unable to create Apex on DB")
 	}
 
 	//install ords and http and load balancer
 	if err := CreateOrdsOption(r, req, &apexords); err != nil {
-		log.Error(err, "unable to create Http,Ords")
+		log.Log.Error(err, "unable to create Http,Ords")
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func ignoreNotFound(err error) error {
-	if apierrs.IsNotFound(err) {
-		return nil
-	}
-	return err
-}
-
 //CreateOrdsOption to create http and ords deployments plus load balancer
-func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 	apexordsordsdeployname := apexords.Spec.Ordsname + "-apexords-ords-deployment"
-	log.Info("Creating Ords deployment :" + apexordsordsdeployname)
+	log.Log.Info("Creating Ords deployment :" + apexordsordsdeployname)
 	// complete http and ords deployment  settings
 
 	//update sys apex passwords, dbhost, db service in yaml
@@ -140,7 +144,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(config.Ordsyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize Ords deployment yaml")
+		log.Log.Error(err, "can't deserialize Ords deployment yaml")
 	}
 	//Update selector and owner reference
 	var ordsselector = map[string]string{
@@ -164,7 +168,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	//Update LB service name
 	obj, _, err = decode([]byte(config.OrdsLBsvcyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize Ords Load balancer service yaml")
+		log.Log.Error(err, "can't deserialize Ords Load balancer service yaml")
 	}
 	ordssvc := obj.(*corev1.Service)
 	ordssvc.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-svc"
@@ -175,7 +179,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	//Update nodeport service name
 	obj, _, err = decode([]byte(config.OrdsNodePortsvcyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize Ords Load balancer service yaml")
+		log.Log.Error(err, "can't deserialize Ords Load balancer service yaml")
 	}
 	ordsnodeportsvc := obj.(*corev1.Service)
 	ordsnodeportsvc.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-nodeport-svc"
@@ -186,7 +190,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	//complete ords and http configmap settings
 	obj, _, err = decode([]byte(config.Ordsconfigmapyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize Ords configmap yaml")
+		log.Log.Error(err, "can't deserialize Ords configmap yaml")
 	}
 	ordsconfigmap := obj.(*corev1.ConfigMap)
 	ordsconfigmap.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-ords-cm"
@@ -195,7 +199,7 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 
 	obj, _, err = decode([]byte(config.Httpconfigmapyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize Ords configmap yaml")
+		log.Log.Error(err, "can't deserialize Ords configmap yaml")
 	}
 	httpconfigmap := obj.(*corev1.ConfigMap)
 	httpconfigmap.ObjectMeta.Name = apexords.Spec.Ordsname + "-apexords-http-cm"
@@ -203,91 +207,91 @@ func CreateOrdsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	httpconfigmap.ObjectMeta.OwnerReferences = apexordsownerref // add owner reference, so easy to clean up
 
 	//create configmap
-	log.Info("Creating configmap " + apexords.Spec.Ordsname + "-apexords-ords-cm")
+	log.Log.Info("Creating configmap " + apexords.Spec.Ordsname + "-apexords-ords-cm")
 	if err := r.Create(ctx, ordsconfigmap); err != nil {
-		log.Error(err, "unable to create Ords confimap")
+		log.Log.Error(err, "unable to create Ords confimap")
 
 	}
 
-	log.Info("Creating configmap " + apexords.Spec.Ordsname + "-apexords-http-cm")
+	log.Log.Info("Creating configmap " + apexords.Spec.Ordsname + "-apexords-http-cm")
 	if err := r.Create(ctx, httpconfigmap); err != nil {
-		log.Error(err, "unable to create http confimap")
+		log.Log.Error(err, "unable to create http confimap")
 
 	}
 
 	//create Ords schemas in DB
 	//create ords pod
 	if err := CreateOrdsPod(r, req, apexords); err != nil {
-		log.Error(err, "unable to create Ords pod")
+		log.Log.Error(err, "unable to create Ords pod")
 
 	}
 	//run Ords installation sql in ords pod
-	log.Info("Create Ords in Target DB....")
+	log.Log.Info("Create Ords in Target DB....")
 
 	ordstext := "mv /opt/oracle/ords/config/ords/defaults.xml /tmp;cp /mnt/k8s/ords_params.properties /tmp/ords_params.properties;java -jar /opt/oracle/ords/ords.war install --parameterFile /tmp/ords_params.properties simple"
 	OrdsCommand := []string{"/bin/sh", "-c", ordstext}
 	Podname := "ordspod"
 	if err := ExecPodCmd(r, req, Podname, OrdsCommand); err != nil {
-		log.Error(err, "Error to run "+strings.Join(OrdsCommand, " ")+" in ordspod")
+		log.Log.Error(err, "Error to run "+strings.Join(OrdsCommand, " ")+" in ordspod")
 	}
 	//clean ords pod
 	if err := DeleteOrdsPod(r, req); err != nil {
-		log.Error(err, "unable to delete Ords pod")
+		log.Log.Error(err, "unable to delete Ords pod")
 
 	}
 	//create ords deployments
-	log.Info("Creating ords deployment " + apexordsordsdeployname)
+	log.Log.Info("Creating ords deployment " + apexordsordsdeployname)
 	if err := r.Create(ctx, ordsdeployment); err != nil {
-		log.Error(err, "unable to create Ords deployment")
+		log.Log.Error(err, "unable to create Ords deployment")
 
 	}
 	//create nodeport service
-	log.Info("Creating ords nodeport service " + apexords.Spec.Ordsname + "-apexords-nodeport-svc")
+	log.Log.Info("Creating ords nodeport service " + apexords.Spec.Ordsname + "-apexords-nodeport-svc")
 	if err := r.Create(ctx, ordsnodeportsvc); err != nil {
-		log.Error(err, "unable to create Ords ords nodeport service ")
+		log.Log.Error(err, "unable to create Ords ords nodeport service ")
 
 	}
 
 	//create Load balancer service
-	log.Info("Creating ords load balancer service " + apexords.Spec.Ordsname + "-apexords-svc")
+	log.Log.Info("Creating ords load balancer service " + apexords.Spec.Ordsname + "-apexords-svc")
 	if err := r.Create(ctx, ordssvc); err != nil {
-		log.Error(err, "unable to create Ords ords load balancer service ")
+		log.Log.Error(err, "unable to create Ords ords load balancer service ")
 
 	}
-	log.Info("DB sys Apex Ords schemas password is: " + r.Dbpassword + " users need to update it later.")
-	log.Info("Apex Internal Workspace admin password: " + r.Dbpassword + "Apx1#" + " (Use apxchpwd.sql to change it)")
+	log.Log.Info("DB sys Apex Ords schemas password is: " + r.Dbpassword + " users need to update it later.")
+	log.Log.Info("Apex Internal Workspace admin password: " + r.Dbpassword + "Apx1#" + " (Use apxchpwd.sql to change it)")
 	return nil
 }
 
 //CreateDbstsOption to create db statefulset
-func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 
 	//check if DB stateful exists, if not create one
 	var DBstatefulset appsv1.StatefulSetList
 	if err := r.List(ctx, &DBstatefulset, client.InNamespace(req.Namespace), client.MatchingLabels(Apexordsoperatorlabel)); err != nil {
-		log.Error(err, "unable to list Apexords operator DB statefulset")
+		log.Log.Error(err, "unable to list Apexords operator DB statefulset")
 		return err
 	}
 	if len(DBstatefulset.Items) == 0 {
-		log.Info("unable to find Apexords operator DB statefulset Pod,going to create new one..")
+		log.Log.Info("unable to find Apexords operator DB statefulset Pod,going to create new one..")
 		//create a new db statefulset here
 		if err := CreateDbOption(r, req, apexords); err != nil {
-			log.Error(err, "unable to create Apexords operator DB statefulset.")
+			log.Log.Error(err, "unable to create Apexords operator DB statefulset.")
 			return err
 		}
 	} else {
 		for i := 0; i < len(DBstatefulset.Items); i++ {
-			log.Info("Found running Apexords operator DB statefulset name is " + DBstatefulset.Items[i].ObjectMeta.Name)
+			log.Log.Info("Found running Apexords operator DB statefulset name is " + DBstatefulset.Items[i].ObjectMeta.Name)
 			if DBstatefulset.Items[i].ObjectMeta.Name == apexords.Spec.Dbname+"-apexords-db-sts" {
-				log.Info(apexords.Spec.Dbname + "-apexords-db-sts" + "exists. Do nothing")
+				log.Log.Info(apexords.Spec.Dbname + "-apexords-db-sts" + "exists. Do nothing")
 
 			} else {
-				log.Info("unable to find " + apexords.Spec.Dbname + "-apexords-db-sts." + "going to create new one..")
+				log.Log.Info("unable to find " + apexords.Spec.Dbname + "-apexords-db-sts." + "going to create new one..")
 				//create a new db statefulset here
 				if err := CreateDbOption(r, req, apexords); err != nil {
-					log.Error(err, "unable to create Apexords operator DB statefulsets.")
+					log.Log.Error(err, "unable to create Apexords operator DB statefulsets.")
 					return err
 				}
 			}
@@ -297,28 +301,28 @@ func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	//check if DB service exists, if not create one
 	var DBsvclist corev1.ServiceList
 	if err := r.List(ctx, &DBsvclist, client.InNamespace(req.Namespace), client.MatchingLabels(Apexordsoperatorlabel)); err != nil {
-		log.Error(err, "unable to list Apexords operator DB service")
+		log.Log.Error(err, "unable to list Apexords operator DB service")
 		return err
 	}
 	if len(DBsvclist.Items) == 0 {
-		log.Info("unable to find Apexords operator DB service,going to create new one..")
+		log.Log.Info("unable to find Apexords operator DB service,going to create new one..")
 		//create a new db service here
 		if err := CreateDbSvcOption(r, req, apexords); err != nil {
-			log.Error(err, "unable to create Apexords operator k8s service for DB")
+			log.Log.Error(err, "unable to create Apexords operator k8s service for DB")
 			return err
 		}
 	} else {
 		for i, DBsvc := range DBsvclist.Items {
 			fmt.Printf("\n%v\n", i)
-			log.Info("Found running Apexords operator DB service name is " + DBsvc.ObjectMeta.Name)
+			log.Log.Info("Found running Apexords operator DB service name is " + DBsvc.ObjectMeta.Name)
 			if DBsvc.ObjectMeta.Name == apexords.Spec.Dbname+"-apexords-db-svc" {
-				log.Info(apexords.Spec.Dbname + "-apexords-db-svc" + " exists. Do nothing")
+				log.Log.Info(apexords.Spec.Dbname + "-apexords-db-svc" + " exists. Do nothing")
 
 			} else {
-				log.Info("unable to find " + apexords.Spec.Dbname + "-apexords-db-svc." + "going to create new one..")
+				log.Log.Info("unable to find " + apexords.Spec.Dbname + "-apexords-db-svc." + "going to create new one..")
 				//create a new db service here
 				if err := CreateDbSvcOption(r, req, apexords); err != nil {
-					log.Error(err, "unable to create Apexords operator DB service")
+					log.Log.Error(err, "unable to create Apexords operator DB service")
 					return err
 				}
 			}
@@ -328,9 +332,9 @@ func CreateDbstsOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 }
 
 //CreateApexOption is to create Apex schema in DB
-func CreateApexOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateApexOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 
 	//verify if DB pod is up and running
 	dbpodstatus := &corev1.Pod{}
@@ -348,61 +352,61 @@ func CreateApexOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 	}
 	//30 min timeout for starting pod
 	if !verifyPodState() {
-		log.Info("waiting for db pod to start.......sleep for 30 min")
+		log.Log.Info("waiting for db pod to start.......sleep for 30 min")
 		time.Sleep(30 * time.Minute)
 
 	} else {
-		log.Info("db pod is started.......")
+		log.Log.Info("db pod is started.......")
 
 	}
 
 	if !verifyPodState() {
-		log.Error(nil, "30 Min timeout to start db pod")
+		log.Log.Error(nil, "30 Min timeout to start db pod")
 		return nil
 	}
 	//create sqlpluspod
 	if err := CreateSqlplusPod(r, req); err != nil {
-		log.Error(err, "unable to create Sqlpluspod")
+		log.Log.Error(err, "unable to create Sqlpluspod")
 
 	}
 	// if apexords.Spec.Apexruntimeonly is true,run apex runtimeonly installation sql in sqlplispod
 	if apexords.Spec.Apexruntimeonly {
-		log.Info("Create Apex runtime only in Target DB....")
+		log.Log.Info("Create Apex runtime only in Target DB....")
 		sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@createapexruntimeonly.sql"
 		SQLCommand := []string{"/bin/sh", "-c", sqltext}
 		Podname := "sqlpluspod"
 		if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
-			log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+			log.Log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
 		}
 	} else {
-		log.Info("Create Apex in Target DB....")
+		log.Log.Info("Create Apex in Target DB....")
 		sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@createapex.sql"
 		SQLCommand := []string{"/bin/sh", "-c", sqltext}
 		Podname := "sqlpluspod"
 		if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
-			log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+			log.Log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
 		}
 	}
 
-	log.Info("Update Apex schema password in Target DB....")
+	log.Log.Info("Update Apex schema password in Target DB....")
 	sqltext := "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@updatepass.sql " + r.Dbpassword
 	SQLCommand := []string{"/bin/sh", "-c", sqltext}
 	Podname := "sqlpluspod"
 	if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
-		log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+		log.Log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
 	}
 
-	log.Info("Update Apex workspace Admin password in Target DB.....")
+	log.Log.Info("Update Apex workspace Admin password in Target DB.....")
 	sqltext = "sqlplus " + "sys/" + r.Dbpassword + "@" + apexords.Spec.Dbname + "-apexords-db-svc" + ":" + apexords.Spec.Dbport + "/" + apexords.Spec.Dbservice + " as sysdba " + "@apxchpwd-silent-admin.sql " + r.Dbpassword + "Apx1#"
 	SQLCommand = []string{"/bin/sh", "-c", sqltext}
 	Podname = "sqlpluspod"
 	if err := ExecPodCmd(r, req, Podname, SQLCommand); err != nil {
-		log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
+		log.Log.Error(err, "Error to run "+strings.Join(SQLCommand, " ")+" in Sqlpluspod")
 	}
 
 	//delete sqlpluspod
 	if err := DeleteSqlplusPod(r, req); err != nil {
-		log.Error(err, "unable to delete Sqlpluspod")
+		log.Log.Error(err, "unable to delete Sqlpluspod")
 	}
 
 	return nil
@@ -411,7 +415,7 @@ func CreateApexOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapex
 //DeleteSqlplusPod function is to clean sqlpluspod
 func DeleteSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -419,9 +423,9 @@ func DeleteSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 			Name:      "sqlpluspod",
 		},
 	}
-	log.Info("Deleting sqlpluspod .......")
+	log.Log.Info("Deleting sqlpluspod .......")
 	if err := r.Delete(ctx, pod); err != nil {
-		log.Error(err, "unable to delete sqlplus pod")
+		log.Log.Error(err, "unable to delete sqlplus pod")
 		return err
 	}
 	return nil
@@ -430,7 +434,7 @@ func DeleteSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 //DeleteOrdsPod function is to clean ordspod
 func DeleteOrdsPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -438,18 +442,18 @@ func DeleteOrdsPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 			Name:      "ordspod",
 		},
 	}
-	log.Info("Deleting ordspod .......")
+	log.Log.Info("Deleting ordspod .......")
 	if err := r.Delete(ctx, pod); err != nil {
-		log.Error(err, "unable to delete ords pod")
+		log.Log.Error(err, "unable to delete ords pod")
 		return err
 	}
 	return nil
 }
 
 //CreateOrdsPod Function to create ords pod to run installation sql for ords schemas
-func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 	var waitsec int64 = 10
 
 	typeMetadata := metav1.TypeMeta{
@@ -490,9 +494,9 @@ func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexord
 		ObjectMeta: objectMetadata,
 		Spec:       podSpecs,
 	}
-	log.Info("Creating ords pod .......")
+	log.Log.Info("Creating ords pod .......")
 	if err := r.Create(ctx, &pod); err != nil {
-		log.Error(err, "unable to create ords pod")
+		log.Log.Error(err, "unable to create ords pod")
 		return err
 	}
 	podstatus := &corev1.Pod{}
@@ -511,22 +515,22 @@ func CreateOrdsPod(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexord
 	//20 min timeout for starting pod
 	for i := 0; i < 120; i++ {
 		if !verifyPodState() {
-			log.Info("waiting for ordspod to start.......")
+			log.Log.Info("waiting for ordspod to start.......")
 			time.Sleep(10 * time.Second)
 
 		} else {
-			log.Info("ordspod started.......")
+			log.Log.Info("ordspod started.......")
 			return nil
 		}
 	}
-	log.Error(nil, "Timeout to start ords pod")
+	log.Log.Error(nil, "Timeout to start ords pod")
 	return nil
 }
 
 //CreateSqlplusPod Function to create sqlpluspod to run installation sql
 func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 	var waitsec int64 = 10
 	typeMetadata := metav1.TypeMeta{
 		Kind:       "Pod",
@@ -552,10 +556,10 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 		ObjectMeta: objectMetadata,
 		Spec:       podSpecs,
 	}
-	log.Info("Creating sqlpluspod .......")
+	log.Log.Info("Creating sqlpluspod .......")
 
 	if err := r.Create(ctx, &pod); err != nil {
-		log.Error(err, "unable to create sqlplus pod")
+		log.Log.Error(err, "unable to create sqlplus pod")
 		return err
 	}
 	podstatus := &corev1.Pod{}
@@ -574,26 +578,27 @@ func CreateSqlplusPod(r *ApexOrdsReconciler, req ctrl.Request) error {
 	//8 min timeout for starting pod
 	for i := 0; i < 96; i++ {
 		if !verifyPodState() {
-			log.Info("waiting for sqlpluspod to start.......")
+			log.Log.Info("waiting for sqlpluspod to start.......")
 			time.Sleep(5 * time.Second)
 
 		} else {
-			log.Info("sqlpluspod started.......")
+			log.Log.Info("sqlpluspod started.......")
 			return nil
 		}
 	}
-	log.Error(nil, "Timeout to start sqlplus pod")
+	log.Log.Error(nil, "Timeout to start sqlplus pod")
 	return nil
 
 }
 
 //ExecPodCmd function is to run cmd ie sqlplus
 func ExecPodCmd(r *ApexOrdsReconciler, req ctrl.Request, Podname string, SQLCommand []string) error {
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	ctx := context.Background()
+	_ = log.FromContext(ctx)
 	//get restconfig from kubeconfig or cluster
 	cfg, err := ctrlconfig.GetConfig()
 	if err != nil {
-		log.Error(err, "unable to get kubeconfig")
+		log.Log.Error(err, "unable to get kubeconfig")
 		return err
 
 	}
@@ -617,7 +622,7 @@ func ExecPodCmd(r *ApexOrdsReconciler, req ctrl.Request, Podname string, SQLComm
 
 	exec, err := remotecommand.NewSPDYExecutor(cfg, "POST", execReq.URL())
 	if err != nil {
-		log.Error(err, "error while creating Executor:")
+		log.Log.Error(err, "error while creating Executor:")
 		return err
 
 	}
@@ -629,7 +634,7 @@ func ExecPodCmd(r *ApexOrdsReconciler, req ctrl.Request, Podname string, SQLComm
 		Tty:    false,
 	})
 	if err != nil {
-		log.Error(err, "error in Stream")
+		log.Log.Error(err, "error in Stream")
 		return err
 	} else {
 		return nil
@@ -638,11 +643,11 @@ func ExecPodCmd(r *ApexOrdsReconciler, req ctrl.Request, Podname string, SQLComm
 }
 
 //CreateDbSvcOption is to create DB service in K8S
-func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 
-	log.Info("Creating DB service :" + apexords.Spec.Dbname + "-apexords-db-svc")
+	log.Log.Info("Creating DB service :" + apexords.Spec.Dbname + "-apexords-db-svc")
 
 	//Update service name
 	var oradbsvc *corev1.Service
@@ -660,7 +665,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(config.OradbSvcyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize oradb service yaml")
+		log.Log.Error(err, "can't deserialize oradb service yaml")
 	}
 	oradbsvc = obj.(*corev1.Service)
 	oradbsvc.ObjectMeta.Name = apexords.Spec.Dbname + "-apexords-db-svc"
@@ -669,7 +674,7 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 	oradbsvc.Spec.Selector = oradbselector
 
 	if err := r.Create(ctx, oradbsvc); err != nil {
-		log.Error(err, "unable to create DB service")
+		log.Log.Error(err, "unable to create DB service")
 		return err
 	}
 
@@ -677,16 +682,16 @@ func CreateDbSvcOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theape
 }
 
 //CreateDbOption function to DB statefulset
-func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexordsv1.ApexOrds) error {
+func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *operatorv1.ApexOrds) error {
 	ctx := context.Background()
-	log := r.Log.WithValues("apexords", req.NamespacedName)
+	_ = log.FromContext(ctx)
 	apexordsdbstsname := apexords.Spec.Dbname + "-apexords-db-sts"
-	log.Info("Creating DB statefulset :" + apexordsdbstsname)
+	log.Log.Info("Creating DB statefulset :" + apexordsdbstsname)
 	// complete db statefulset  settings
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(config.OradbStsyml), nil, nil)
 	if err != nil {
-		log.Error(err, "can't deserialize oradb sts yaml")
+		log.Log.Error(err, "can't deserialize oradb sts yaml")
 	}
 	oradbsts := obj.(*appsv1.StatefulSet)
 	oradbsts.ObjectMeta.Name = apexordsdbstsname
@@ -716,7 +721,7 @@ func CreateDbOption(r *ApexOrdsReconciler, req ctrl.Request, apexords *theapexor
 	//fmt.Printf("%v#\n",o.oradbsts.Spec.VolumeClaimTemplates)
 
 	if err := r.Create(ctx, oradbsts); err != nil {
-		log.Error(err, "unable to create DB statefulset")
+		log.Log.Error(err, "unable to create DB statefulset")
 		return err
 	}
 
@@ -733,9 +738,9 @@ func Autopasswd(s string) string {
 
 }
 
-//SetupWithManager is to set up ord with controller runtime manager
+// SetupWithManager sets up the controller with the Manager.
 func (r *ApexOrdsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&theapexordsv1.ApexOrds{}).
+		For(&operatorv1.ApexOrds{}).
 		Complete(r)
 }

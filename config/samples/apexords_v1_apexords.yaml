@@ -1,4 +1,4 @@
-apiVersion: theapexords.apexords-operator/v1
+apiVersion: operator.apexords-operator/v1
 kind: ApexOrds
 metadata:
   name: apexords-apexdevords

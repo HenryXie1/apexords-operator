@@ -1,4 +1,5 @@
 /*
+Copyright 2021 Henry Xie.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1 contains API Schema definitions for the theapexords v1 API group
-// +kubebuilder:object:generate=true
-// +groupName=theapexords.apexords-operator
+// Package v1 contains API Schema definitions for the operator v1 API group
+//+kubebuilder:object:generate=true
+//+groupName=operator.apexords-operator
 package v1
 
 import (
@@ -25,7 +26,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "theapexords.apexords-operator", Version: "v1"}
+	GroupVersion = schema.GroupVersion{Group: "operator.apexords-operator", Version: "v1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}

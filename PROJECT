@@ -1,3 +1,16 @@
-version: "2"
 domain: apexords-operator
-repo: github.com/HenryXie1/apexords-operator
+layout:
+- go.kubebuilder.io/v3
+projectName: apexords-operator
+repo: apexords-operator/apexords-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: apexords-operator
+  group: operator
+  kind: ApexOrds
+  path: apexords-operator/apexords-operator/api/v1
+  version: v1
+version: "3"

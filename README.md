@@ -41,7 +41,7 @@ EOF
 * run below cmd
 ```
 cat <<EOF | kubectl apply -f -
-apiVersion: theapexords.apexords-operator/v1
+apiVersion: operator.apexords-operator/v1
 kind: ApexOrds
 metadata:
  name: apexords-apexdevords
