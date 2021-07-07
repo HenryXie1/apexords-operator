@@ -1,5 +1,5 @@
 # Apexords-Operator in Kubernetes
-This is operator to automate Apex [Oracle Application Express](https://apex.oracle.com) 19.1 and Ords [oracle rest data service](https://www.oracle.com/tools/technologies/faq-rest-data-services.html) via kubernetes [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) ,it creates a brand new Oracle 19c database statefulset,apex, ords  deployment plus load balancer in the kubernetes cluster.  This operator is using [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) to create a framework. Tested in aws EKS.
+This is operator to automate Apex [Oracle Application Express](https://apex.oracle.com) 19.1 and Ords [oracle rest data service](https://www.oracle.com/tools/technologies/faq-rest-data-services.html) via kubernetes [CRD](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) ,it creates a brand new Oracle 19c database statefulset,apex, ords  deployment plus load balancer in the kubernetes cluster.  This operator is using [kubebuilder](https://github.com/kubernetes-sigs/kubebuilder) to create a framework. Tested in KIND and AWS EKS. It has upgraded with kubebuilder v3.1 controller-runtime v0.9.2 Golang 1.16.5
 
 ## Preparation
 * check kubectl cluster-info  is working properly 
