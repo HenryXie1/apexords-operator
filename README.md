@@ -70,6 +70,6 @@ EOF
 ## Clean up
 * kubectl delete apexords  the-apexords-name
   * As we put owner reference for apexords , it will delete all related statefulesets, deployments,loadbalancer,configmap....etc
-  * PV will not be deleted,thus Data won't be lost
+  * PV will not be deleted,thus Data won't be lost.
  ## YouTube Demo:
  [![YouTube Demo](https://img.youtube.com/vi/bebUj6TNtuY/0.jpg)](https://www.youtube.com/watch?v=bebUj6TNtuY)
